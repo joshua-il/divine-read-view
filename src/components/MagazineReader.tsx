@@ -167,11 +167,13 @@ export function MagazineReader() {
   const next = useCallback(() => canNext && setSpread((s) => (twoUp ? (s === 0 ? 2 : s + 2) : s + 1)), [canNext, twoUp]);
   const prev = useCallback(() => canPrev && setSpread((s) => (twoUp ? (s <= 2 ? 0 : s - 2) : s - 1)), [canPrev, twoUp]);
   const goTo = (p: number) => {
-    setShowThumbs(false);
+    // Keep thumbs open per requirement 3
     if (mode === "scroll") { document.getElementById(`mag-page-${p}`)?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     setSpread(twoUp ? (p === 1 ? 0 : p - (p % 2)) : p - 1);
   };
   const currentPage = mode === "scroll" ? scrollPage : pages[0] ?? 1;
+
+
 
   const switchMode = (m: Mode) => {
     const p = currentPage;
@@ -211,14 +213,41 @@ export function MagazineReader() {
   const pageH = Math.round(stageH * zoom);
   const label = mode === "scroll" ? `${scrollPage}` : pages.length === 2 ? `${pages[0]}–${pages[1]}` : `${pages[0] ?? 0}`;
 
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("admin") === "true" || localStorage.getItem("nrim_admin") === "true") {
+      setIsAdmin(true);
+    }
+  }, []);
+
+  const toggleAdmin = () => {
+    if (isAdmin) {
+      setIsAdmin(false);
+      localStorage.removeItem("nrim_admin");
+    } else {
+      const pin = prompt("Enter Admin Passcode (default: admin123):");
+      if (pin === "admin123" || pin === "admin") {
+        setIsAdmin(true);
+        localStorage.setItem("nrim_admin", "true");
+      } else if (pin !== null) {
+        alert("Incorrect passcode.");
+      }
+    }
+  };
+
   return (
     <div ref={stageRef} className="bg-stage flex min-h-full flex-col">
       <input ref={inputRef} type="file" accept="application/pdf" hidden onChange={(e) => onFile(e.target.files?.[0])} />
 
       {/* Toolbar */}
       <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur md:px-8">
-        <div className="min-w-0 text-xs uppercase tracking-[0.3em] text-muted-foreground">
+        <div className="min-w-0 text-xs uppercase tracking-[0.3em] text-muted-foreground flex items-center gap-2">
           {fileName ? <span className="truncate">{fileName.replace(/\.pdf$/i, "")}</span> : "No issue loaded"}
+          <button onClick={toggleAdmin} className="ml-2 text-[10px] text-muted-foreground hover:text-foreground opacity-60 hover:opacity-100" title="Admin Mode">
+            {isAdmin ? "🔓 Admin" : "🔒 Public"}
+          </button>
         </div>
         <div className="flex items-center gap-1">
           {doc && (
@@ -240,9 +269,11 @@ export function MagazineReader() {
               </div>
             </>
           )}
-          <button onClick={() => inputRef.current?.click()} className="ml-2 inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition hover:border-primary hover:text-primary">
-            <Upload size={14} /> {doc ? "Replace" : "Upload PDF"}
-          </button>
+          {isAdmin && (
+            <button onClick={() => inputRef.current?.click()} className="ml-2 inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition hover:border-primary hover:text-primary">
+              <Upload size={14} /> {doc ? "Replace" : "Upload PDF"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -257,17 +288,25 @@ export function MagazineReader() {
       {/* Stage */}
       <div className="relative flex flex-1 items-center justify-center overflow-auto px-4 py-8">
         {!doc ? (
-          <button
-            onClick={() => inputRef.current?.click()}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => { e.preventDefault(); onFile(e.dataTransfer.files?.[0]); }}
-            className="flex w-full max-w-xl flex-col items-center gap-4 rounded-2xl border border-dashed border-border bg-card/40 px-8 py-16 text-center transition hover:border-primary"
-          >
-            <Upload className="text-primary" size={32} />
-            <span className="font-display text-3xl">{loading ? "Opening magazine…" : "Upload this month's issue"}</span>
-            <span className="text-sm text-muted-foreground">Drag & drop the magazine PDF here, or click to choose a file. Large files are fine — pages load one at a time.</span>
-            {error && <span className="text-sm text-destructive">{error}</span>}
-          </button>
+          isAdmin ? (
+            <button
+              onClick={() => inputRef.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => { e.preventDefault(); onFile(e.dataTransfer.files?.[0]); }}
+              className="flex w-full max-w-xl flex-col items-center gap-4 rounded-2xl border border-dashed border-border bg-card/40 px-8 py-16 text-center transition hover:border-primary"
+            >
+              <Upload className="text-primary" size={32} />
+              <span className="font-display text-3xl">{loading ? "Opening magazine…" : "Upload this month's issue"}</span>
+              <span className="text-sm text-muted-foreground">Drag & drop the magazine PDF here, or click to choose a file. Large files are fine — pages load one at a time.</span>
+              {error && <span className="text-sm text-destructive">{error}</span>}
+            </button>
+          ) : (
+            <div className="flex w-full max-w-xl flex-col items-center gap-4 rounded-2xl border border-border bg-card/40 px-8 py-16 text-center">
+              <span className="font-display text-3xl">{loading ? "Loading magazine…" : "No issue uploaded yet"}</span>
+              <span className="text-sm text-muted-foreground">Please check back soon for the latest issue of the magazine.</span>
+              {error && <span className="text-sm text-destructive">{error}</span>}
+            </div>
+          )
         ) : mode === "scroll" ? (
           <div className="flex flex-col items-center gap-6">
             {Array.from({ length: total }, (_, i) => (

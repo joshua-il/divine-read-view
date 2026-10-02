@@ -293,8 +293,8 @@ export function MagazineReader() {
 
         {doc && (
           <>
-            <NavBtn side="left" disabled={!canPrev} onClick={prev} />
-            <NavBtn side="right" disabled={!canNext} onClick={next} />
+            {mode !== "scroll" && <NavBtn side="left" disabled={!canPrev} onClick={prev} />}
+            {mode !== "scroll" && <NavBtn side="right" disabled={!canNext} onClick={next} />}
           </>
         )}
       </div>

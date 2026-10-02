@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { ChevronLeft, ChevronRight, Maximize, Minus, Plus, Upload, LayoutGrid, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize, Minus, Plus, Upload, LayoutGrid, Download, Share2 } from "lucide-react";
 import { savePdf, loadPdf } from "@/lib/pdf-store";
 
 async function getPdfjs() {
@@ -57,6 +57,61 @@ function Thumb({ doc, num, active, onClick }: { doc: PDFDocumentProxy; num: numb
   );
 }
 
+type Mode = "spread" | "single" | "scroll";
+
+function LazyPage({ doc, num, height, onVisible }: { doc: PDFDocumentProxy; num: number; height: number; onVisible: (n: number) => void }) {
+  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const io = new IntersectionObserver(([e]) => { if (e?.isIntersecting) setVisible(true); }, { rootMargin: "800px" });
+    const io2 = new IntersectionObserver(([e]) => { if (e?.isIntersecting) onVisible(num); }, { threshold: 0.5 });
+    if (ref.current) { io.observe(ref.current); io2.observe(ref.current); }
+    return () => { io.disconnect(); io2.disconnect(); };
+  }, [num, onVisible]);
+  return (
+    <div id={`mag-page-${num}`} ref={ref} className="page-shadow scroll-mt-24 bg-ivory" style={{ minHeight: height, minWidth: visible ? undefined : height * 0.707 }}>
+      {visible && <PdfPage doc={doc} num={num} height={height} />}
+    </div>
+  );
+}
+
+function ShareMenu({ page, onClose }: { page: number; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const [withPage, setWithPage] = useState(false);
+  const base = window.location.origin + window.location.pathname;
+  const url = withPage ? `${base}?page=${page}` : base;
+  const title = "NRIM Magazine – March 2026 Issue";
+  const text = "Read the latest issue from Nations Reach International Missions.";
+  const e = encodeURIComponent;
+  const links = [
+    { name: "WhatsApp", href: `https://wa.me/?text=${e(`${title} – ${url}`)}` },
+    { name: "Facebook", href: `https://www.facebook.com/sharer/sharer.php?u=${e(url)}` },
+    { name: "X", href: `https://twitter.com/intent/tweet?text=${e(title)}&url=${e(url)}` },
+    { name: "Email", href: `mailto:?subject=${e(title)}&body=${e(`${text}\n\n${url}`)}` },
+  ];
+  return (
+    <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-xl border border-border bg-popover p-4 text-left shadow-xl">
+      <p className="font-display text-lg">Share this issue</p>
+      <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+        <input type="checkbox" checked={withPage} onChange={(ev) => setWithPage(ev.target.checked)} className="accent-primary" />
+        Open at page {page}
+      </label>
+      <div className="mt-3 flex gap-2">
+        <input readOnly value={url} className="min-w-0 flex-1 rounded-md border border-input bg-background px-2 py-1.5 text-xs" />
+        <button onClick={() => { navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="btn-primary rounded-md px-3 text-xs font-semibold">{copied ? "Copied" : "Copy"}</button>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {links.map((l) => (
+          <a key={l.name} href={l.href} target="_blank" rel="noopener noreferrer" onClick={onClose} className="rounded-md border border-border px-3 py-2 text-center text-xs font-semibold transition hover:border-primary hover:text-primary">{l.name}</a>
+        ))}
+      </div>
+      {typeof navigator.share === "function" && (
+        <button onClick={() => navigator.share({ title, text, url }).catch(() => {})} className="mt-2 w-full rounded-md border border-border px-3 py-2 text-xs font-semibold transition hover:border-primary hover:text-primary">More options…</button>
+      )}
+    </div>
+  );
+}
+
 export function MagazineReader() {
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [fileName, setFileName] = useState("");
@@ -67,6 +122,10 @@ export function MagazineReader() {
   const [zoom, setZoom] = useState(1);
   const [isWide, setIsWide] = useState(true);
   const [showThumbs, setShowThumbs] = useState(false);
+  const [mode, setMode] = useState<Mode>("spread");
+  const [scrollPage, setScrollPage] = useState(1);
+  const [shareOpen, setShareOpen] = useState(false);
+  const onPageVisible = useCallback((n: number) => setScrollPage(n), []);
   const [stageH, setStageH] = useState(700);
   const stageRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -101,14 +160,33 @@ export function MagazineReader() {
   }, []);
 
   const total = doc?.numPages ?? 0;
-  // pages shown: cover alone, then pairs (2-3, 4-5 ...) on wide screens; single pages on narrow
-  const pages: number[] = !doc ? [] : !isWide ? [spread + 1] : spread === 0 ? [1] : [spread, spread + 1].filter((p) => p <= total);
-  const step = isWide ? 2 : 1;
-  const canPrev = spread > 0;
-  const canNext = isWide ? (spread === 0 ? total > 1 : spread + 2 <= total) : spread + 1 < total;
-  const next = useCallback(() => canNext && setSpread((s) => (isWide && s === 0 ? 2 : s + step) - (isWide && s === 0 ? 0 : 0)), [canNext, isWide, step]);
-  const prev = useCallback(() => canPrev && setSpread((s) => (isWide ? (s <= 2 ? 0 : s - 2) : s - 1)), [canPrev, isWide]);
-  const goTo = (p: number) => { setSpread(isWide ? (p === 1 ? 0 : p - (p % 2)) : p - 1); setShowThumbs(false); };
+  const twoUp = mode === "spread" && isWide;
+  const pages: number[] = !doc ? [] : !twoUp ? [spread + 1] : spread === 0 ? [1] : [spread, spread + 1].filter((p) => p <= total);
+  const canPrev = mode !== "scroll" && spread > 0;
+  const canNext = mode !== "scroll" && (twoUp ? (spread === 0 ? total > 1 : spread + 2 <= total) : spread + 1 < total);
+  const next = useCallback(() => canNext && setSpread((s) => (twoUp ? (s === 0 ? 2 : s + 2) : s + 1)), [canNext, twoUp]);
+  const prev = useCallback(() => canPrev && setSpread((s) => (twoUp ? (s <= 2 ? 0 : s - 2) : s - 1)), [canPrev, twoUp]);
+  const goTo = (p: number) => {
+    setShowThumbs(false);
+    if (mode === "scroll") { document.getElementById(`mag-page-${p}`)?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    setSpread(twoUp ? (p === 1 ? 0 : p - (p % 2)) : p - 1);
+  };
+  const currentPage = mode === "scroll" ? scrollPage : pages[0] ?? 1;
+
+  const switchMode = (m: Mode) => {
+    const p = currentPage;
+    setMode(m);
+    const two = m === "spread" && isWide;
+    setSpread(two ? (p === 1 ? 0 : p - (p % 2)) : p - 1);
+    if (m === "scroll") setTimeout(() => document.getElementById(`mag-page-${p}`)?.scrollIntoView({ block: "start" }), 50);
+  };
+
+  // Open at ?page=N from shared links
+  useEffect(() => {
+    if (!doc) return;
+    const p = parseInt(new URLSearchParams(window.location.search).get("page") || "", 10);
+    if (p >= 1 && p <= doc.numPages) setSpread(isWide ? (p === 1 ? 0 : p - (p % 2)) : p - 1);
+  }, [doc]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === "ArrowRight") next(); if (e.key === "ArrowLeft") prev(); };
@@ -131,7 +209,7 @@ export function MagazineReader() {
 
   const touch = useRef(0);
   const pageH = Math.round(stageH * zoom);
-  const label = pages.length === 2 ? `${pages[0]}–${pages[1]}` : `${pages[0] ?? 0}`;
+  const label = mode === "scroll" ? `${scrollPage}` : pages.length === 2 ? `${pages[0]}–${pages[1]}` : `${pages[0] ?? 0}`;
 
   return (
     <div ref={stageRef} className="bg-stage flex min-h-full flex-col">
@@ -145,12 +223,21 @@ export function MagazineReader() {
         <div className="flex items-center gap-1">
           {doc && (
             <>
+              <div className="mr-2 flex rounded-full border border-border p-0.5">
+                {([["spread", "Spread"], ["single", "Single"], ["scroll", "Scroll"]] as const).map(([m, l]) => (
+                  <button key={m} onClick={() => switchMode(m)} className={`rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] transition ${mode === m ? "btn-primary" : "text-muted-foreground hover:text-foreground"}`}>{l}</button>
+                ))}
+              </div>
               <ToolBtn label="Zoom out" onClick={() => setZoom((z) => Math.max(0.6, +(z - 0.2).toFixed(1)))}><Minus size={16} /></ToolBtn>
               <span className="w-12 text-center text-xs text-muted-foreground">{Math.round(zoom * 100)}%</span>
               <ToolBtn label="Zoom in" onClick={() => setZoom((z) => Math.min(2.4, +(z + 0.2).toFixed(1)))}><Plus size={16} /></ToolBtn>
               <ToolBtn label="All pages" onClick={() => setShowThumbs((s) => !s)}><LayoutGrid size={16} /></ToolBtn>
               <ToolBtn label="Fullscreen" onClick={() => (document.fullscreenElement ? document.exitFullscreen() : stageRef.current?.requestFullscreen())}><Maximize size={16} /></ToolBtn>
               <a href={fileUrl} download={fileName} aria-label="Download" className="rounded-full p-2 text-foreground/80 transition hover:bg-accent hover:text-foreground"><Download size={16} /></a>
+              <div className="relative">
+                <ToolBtn label="Share" onClick={() => setShareOpen((s) => !s)}><Share2 size={16} /></ToolBtn>
+                {shareOpen && <ShareMenu page={currentPage} onClose={() => setShareOpen(false)} />}
+              </div>
             </>
           )}
           <button onClick={() => inputRef.current?.click()} className="ml-2 inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition hover:border-primary hover:text-primary">
@@ -181,6 +268,12 @@ export function MagazineReader() {
             <span className="text-sm text-muted-foreground">Drag & drop the magazine PDF here, or click to choose a file. Large files are fine — pages load one at a time.</span>
             {error && <span className="text-sm text-destructive">{error}</span>}
           </button>
+        ) : mode === "scroll" ? (
+          <div className="flex flex-col items-center gap-6">
+            {Array.from({ length: total }, (_, i) => (
+              <LazyPage key={i} doc={doc} num={i + 1} height={pageH} onVisible={onPageVisible} />
+            ))}
+          </div>
         ) : (
           <div
             key={spread}
@@ -200,8 +293,8 @@ export function MagazineReader() {
 
         {doc && (
           <>
-            <NavBtn side="left" disabled={!canPrev} onClick={prev} />
-            <NavBtn side="right" disabled={!canNext} onClick={next} />
+            {mode !== "scroll" && <NavBtn side="left" disabled={!canPrev} onClick={prev} />}
+            {mode !== "scroll" && <NavBtn side="right" disabled={!canNext} onClick={next} />}
           </>
         )}
       </div>

@@ -119,7 +119,7 @@ export function MagazineReader() {
   // Preload neighbour pages for instant flipping
   useEffect(() => {
     if (!doc) return;
-    [pages[pages.length - 1] + 1, pages[pages.length - 1] + 2, pages[0] - 1].forEach((p) => p >= 1 && p <= total && doc.getPage(p));
+    const last = pages[pages.length - 1] ?? 1, first = pages[0] ?? 1; [last + 1, last + 2, first - 1].forEach((p) => p >= 1 && p <= total && doc.getPage(p));
   }, [doc, spread]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onFile = async (f?: File) => {
@@ -185,8 +185,8 @@ export function MagazineReader() {
           <div
             key={spread}
             className="flex animate-in fade-in zoom-in-[0.98] duration-300"
-            onTouchStart={(e) => (touch.current = e.touches[0].clientX)}
-            onTouchEnd={(e) => { const d = e.changedTouches[0].clientX - touch.current; if (d < -50) next(); if (d > 50) prev(); }}
+            onTouchStart={(e) => (touch.current = e.touches[0]?.clientX ?? 0)}
+            onTouchEnd={(e) => { const d = (e.changedTouches[0]?.clientX ?? 0) - touch.current; if (d < -50) next(); if (d > 50) prev(); }}
           >
             <div className="page-shadow flex">
               {pages.map((p, i) => (

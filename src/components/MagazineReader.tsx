@@ -45,7 +45,7 @@ function Thumb({ doc, num, active, onClick }: { doc: PDFDocumentProxy; num: numb
   const [visible, setVisible] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    const io = new IntersectionObserver(([e]) => e.isIntersecting && setVisible(true), { rootMargin: "200px" });
+    const io = new IntersectionObserver(([e]) => e?.isIntersecting && setVisible(true), { rootMargin: "200px" });
     if (ref.current) io.observe(ref.current);
     return () => io.disconnect();
   }, []);

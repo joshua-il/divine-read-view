@@ -1,14 +1,20 @@
-# Welcome to your Lovable project
+# NRIM Digital Magazine
+
+i need to create a proper magazine reader page which displays this particular PDF attached in the magazine please https://nrim.org/magazine-march-2026/
+
+the file is quite large so add an option for me to upload this PDF and i need a proper smooth and fast loading reader to add as one of our pages in the NRIM website which is our christian non profit organization - follow the same branding and style as in the screenshot
 
 This project was built with [Lovable](https://lovable.dev).
 
+**Live app**: https://divine-read-view.lovable.app
+
 ## Build with Lovable
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+Continue developing this project in the [Lovable editor](https://lovable.dev/projects/1596b022-9efe-40ff-877e-f17967643c2a).
 
 - **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+- **Stay in sync**: every change made in Lovable is committed straight to this repository.
+- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
 
 ## Development
 
@@ -20,10 +26,3 @@ cd <repository-name>
 npm i
 npm run dev
 ```
-
-## Built with
-
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS

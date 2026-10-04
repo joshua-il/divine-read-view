@@ -60,11 +60,17 @@
   --ring: oklch(0.56 0.24 262);
   --glow-primary: 0 0 40px -6px color-mix(in oklab, var(--primary) 70%, transparent);
   --shadow-page: 0 30px 80px -20px oklch(0 0 0 / 80%);
-  --gradient-stage: radial-gradient(ellipse at top, color-mix(in oklab, var(--navy) 80%, transparent), var(--background) 70%);
+  --gradient-stage: radial-gradient(
+    ellipse at top,
+    color-mix(in oklab, var(--navy) 80%, transparent),
+    var(--background) 70%
+  );
 }
 
 @layer base {
-  * { border-color: var(--color-border); }
+  * {
+    border-color: var(--color-border);
+  }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
@@ -77,6 +83,12 @@
   color: var(--primary-foreground);
   box-shadow: var(--glow-primary);
 }
-@utility glow-ring { box-shadow: var(--glow-primary); }
-@utility page-shadow { box-shadow: var(--shadow-page); }
-@utility bg-stage { background: var(--gradient-stage); }
+@utility glow-ring {
+  box-shadow: var(--glow-primary);
+}
+@utility page-shadow {
+  box-shadow: var(--shadow-page);
+}
+@utility bg-stage {
+  background: var(--gradient-stage);
+}
